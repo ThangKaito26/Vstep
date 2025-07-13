@@ -80,14 +80,12 @@
         .vstep-option:hover { background: var(--primary-light); border-color: var(--primary); }
         .vstep-option.selected { background-color: var(--primary-light); border-color: var(--primary); }
         
-        /* --- FIX: Answer Readability --- */
         .vstep-option.correct { background-color: #dcfce7 !important; border-color: var(--success) !important; color: #166534 !important; font-weight: 600; }
         .vstep-option.incorrect { background-color: #fee2e2 !important; border-color: var(--danger) !important; color: #991b1b !important; }
         
         html.dark .vstep-option.correct { background-color: #14532d !important; border-color: #4ade80 !important; color: #bbf7d0 !important; }
         html.dark .vstep-option.incorrect { background-color: #991b1b !important; border-color: #f87171 !important; color: #fecaca !important; }
 
-        /* Reading Layout Fix */
         .vstep-reading-layout { display: flex; flex-direction: column; }
         @media (min-width: 768px) {
             .vstep-reading-layout { flex-direction: row; gap: 1.5rem; max-height: 80vh; }
@@ -95,7 +93,6 @@
             .vstep-reading-questions { flex: 4; overflow-y: auto; }
         }
 
-        /* --- NEW: Sticky Controls --- */
         .sticky-controls {
             position: fixed;
             bottom: 0;
@@ -131,6 +128,37 @@
         .control-buttons {
             display: flex;
             gap: 1rem;
+        }
+
+        /* --- NEW: Mind Map Styles --- */
+        .mind-map-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 1.5rem;
+            padding: 1.5rem;
+        }
+        .mind-map-topic {
+            background: var(--primary);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 50px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            box-shadow: var(--shadow);
+        }
+        .mind-map-sub-points {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1rem;
+        }
+        .mind-map-sub-point {
+            background: var(--surface-alt);
+            border: 1px solid var(--border);
+            padding: 0.75rem 1.25rem;
+            border-radius: 12px;
+            font-weight: 500;
         }
 
 
@@ -520,9 +548,14 @@
                     taskPrompt = `Chủ đề: ${data.topic}`;
                     contentHTML = `
                         <div class="info-card">
-                            <h4 class="card-title-alt text-lg">Chủ đề: ${data.topic}</h4>
-                            <p class="mt-2">Sơ đồ gợi ý: ${data.idea_map.join(', ')}</p>
-                            <h4 class="card-title-alt mt-4 text-lg">Câu hỏi phụ:</h4>
+                            <h4 class="card-title-alt text-lg text-center">Chủ đề: ${data.topic}</h4>
+                            <div class="mind-map-container">
+                                <div class="mind-map-topic">${data.idea_map.main_idea}</div>
+                                <div class="mind-map-sub-points">
+                                    ${data.idea_map.sub_points.map(point => `<div class="mind-map-sub-point">${point}</div>`).join('')}
+                                </div>
+                            </div>
+                            <h4 class="card-title-alt mt-6 text-lg">Câu hỏi phụ:</h4>
                             <ul class="list-disc list-inside ml-4 mt-2 space-y-1">${data.follow_up_questions.map(q => `<li>${q}</li>`).join('')}</ul>
                         </div>
                     `;
@@ -757,14 +790,14 @@
             const prompt = `Create a VSTEP Speaking Part ${part} test based on the topic: "${topic}". The topics should be common and accessible for B1-B2 learners.
             - If Part 1 (Social Interaction), return a JSON object with "topic1_title", "topic1_questions" (an array of 3-4 introductory questions), "topic2_title", and "topic2_questions" (an array of 3-4 questions on a different subject).
             - If Part 2 (Solution Discussion), return a JSON object with a "situation" (a clear problem) and an "options" array (3 distinct and viable solutions for the user to discuss and choose from).
-            - If Part 3 (Topic Development), return a JSON object with a "topic" (a broader concept), an "idea_map" (an array of 3-4 related ideas to guide the user's talk), and "follow_up_questions" (an array of 2-3 questions to extend the discussion).`;
+            - If Part 3 (Topic Development), return a JSON object with "topic" (a broader concept), an "idea_map" object containing a "main_idea" string and a "sub_points" array of 3-4 strings, and "follow_up_questions" array (2-3 questions).`;
             let schema;
             if (part === '1') {
                 schema = { type: "OBJECT", properties: { topic1_title: { type: "STRING" }, topic1_questions: { type: "ARRAY", items: { type: "STRING" } }, topic2_title: { type: "STRING" }, topic2_questions: { type: "ARRAY", items: { type: "STRING" } } }, required: ["topic1_title", "topic1_questions", "topic2_title", "topic2_questions"] };
             } else if (part === '2') {
                 schema = { type: "OBJECT", properties: { situation: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } } }, required: ["situation", "options"] };
             } else { // Part 3
-                schema = { type: "OBJECT", properties: { topic: { type: "STRING" }, idea_map: { type: "ARRAY", items: { type: "STRING" } }, follow_up_questions: { type: "ARRAY", items: { type: "STRING" } } }, required: ["topic", "idea_map", "follow_up_questions"] };
+                schema = { type: "OBJECT", properties: { topic: { type: "STRING" }, idea_map: { type: "OBJECT", properties: { main_idea: { type: "STRING" }, sub_points: { type: "ARRAY", items: { type: "STRING" } } }, required: ["main_idea", "sub_points"] }, follow_up_questions: { type: "ARRAY", items: { type: "STRING" } } }, required: ["topic", "idea_map", "follow_up_questions"] };
             }
             return await callGemini(prompt, schema);
         }
@@ -936,4 +969,4 @@
 
     </script>
 </body>
-</html>
+</ht
