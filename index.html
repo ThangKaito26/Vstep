@@ -229,10 +229,23 @@
         let recognition;
         let isRecording = false;
         let accumulatedTranscript = '';
+        let availableVoices = []; // To store available voices
+
+        // --- NEW: Function to load voices ---
+        function loadVoices() {
+            availableVoices = speechSynthesis.getVoices().filter(voice => voice.lang.startsWith('en'));
+        }
 
         // --- Initial Setup ---
         document.addEventListener('DOMContentLoaded', () => {
-            applyTheme(); 
+            applyTheme();
+            // Pre-load voices and set up listener
+            if ('speechSynthesis' in window) {
+                loadVoices();
+                if (speechSynthesis.onvoiceschanged !== undefined) {
+                    speechSynthesis.onvoiceschanged = loadVoices;
+                }
+            }
             const buttons = document.querySelectorAll('.practice-btn');
             buttons.forEach(button => {
                 button.addEventListener('click', handlePracticeRequest);
@@ -688,13 +701,31 @@
         }
         
         async function generateListeningTest(topic, part) {
+            let idInstruction = '';
+            let questionCountInstruction = '';
+            let totalQuestions = 0;
+
+            if (part === '1') {
+                idInstruction = "The 'id' for the questions must be sequential from 1 to 8.";
+                questionCountInstruction = "return a JSON array of 8 objects. Each object must have 'audio_script' (20-30 seconds), and a 'questions' array containing exactly 1 question object.";
+                totalQuestions = 8;
+            } else if (part === '2') {
+                idInstruction = "The 'id' for the questions must be sequential from 9 to 20.";
+                questionCountInstruction = "return a JSON array of 3 objects (for 3 conversations). Each object must have 'audio_script' (60-90 seconds, 2 speakers), and a 'questions' array containing exactly 4 question objects.";
+                totalQuestions = 12;
+            } else if (part === '3') {
+                idInstruction = "The 'id' for the questions must be sequential from 21 to 35.";
+                questionCountInstruction = "return a JSON array of 3 objects (for 3 lectures/talks). Each object must have 'audio_script' (90-120 seconds, 1 speaker), and a 'questions' array containing exactly 5 question objects.";
+                totalQuestions = 15;
+            }
+
             const prompt = `Create a VSTEP Listening Part ${part} test based on the topic: "${topic}".
             - The language level must be B1-B2 CEFR. The audio script should be clear, spoken at a natural pace, and have appropriate length for the part.
-            - If part is 1 (Short announcements), return a JSON array of 8 objects. Each object must have "audio_script" (20-30 seconds), and a "questions" array of 1 question object.
-            - If part is 2 (Conversations), return a JSON array of 3 objects. Each object must have "audio_script" (60-90 seconds, 2 speakers), and a "questions" array of 4 question objects.
-            - If part is 3 (Lectures/Talks), return a JSON array of 3 objects. Each object must have "audio_script" (90-120 seconds, 1 speaker), and a "questions" array of 5 question objects.
-            - Each question object must have "id" (sequential number), "question" (clear and concise), "options" (an array of 4 strings, with one correct answer and three plausible but incorrect distractors), and "correct_answer" (the full string of the correct option).
+            - Structure: You must ${questionCountInstruction}
+            - Question Numbering: ${idInstruction} The total number of questions for this part must be exactly ${totalQuestions}.
+            - Each question object must have: "id" (a number), "question" (clear and concise), "options" (an array of 4 strings, with one correct answer and three plausible but incorrect distractors), and "correct_answer" (the full string of the correct option).
             - The content must be strictly related to the topic. Ensure questions test for main ideas, specific details, and inference.`;
+            
             const schema = { type: "ARRAY", items: { type: "OBJECT", properties: { audio_script: { type: "STRING" }, questions: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "NUMBER" }, question: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, correct_answer: { type: "STRING" } }, required: ["id", "question", "options", "correct_answer"] } } }, required: ["audio_script", "questions"] } };
             return await callGemini(prompt, schema);
         }
@@ -755,25 +786,41 @@
             return await callGemini(prompt, schema);
         }
 
-        // --- Audio & Recording Helpers ---
+        // --- Audio & Recording Helpers (FIXED) ---
         function speakText(text) {
             return new Promise((resolve, reject) => {
                 if (!('speechSynthesis' in window)) {
                     console.error('Browser does not support speech synthesis.');
                     return reject('Speech synthesis not supported');
                 }
-                const utterance = new SpeechSynthesisUtterance(text);
-                const voices = speechSynthesis.getVoices().filter(voice => voice.lang.startsWith('en'));
-                if (voices.length > 0) {
-                    utterance.voice = voices.find(v => v.name.includes('Google') && v.name.includes('US')) || voices[0];
-                    utterance.rate = 0.9;
+                
+                // Ensure voices are loaded before speaking
+                if (availableVoices.length === 0) {
+                    loadVoices(); // Attempt to load them again if they were not ready initially
                 }
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US'; // Set language for better voice matching
+
+                if (availableVoices.length > 0) {
+                    // Prefer a Google US English voice if available
+                    utterance.voice = availableVoices.find(v => v.name.includes('Google') && v.name.includes('US')) || availableVoices[0];
+                } else {
+                    console.warn("No English voices found, using browser default.");
+                }
+                
+                utterance.rate = 0.9;
                 utterance.onend = resolve;
                 utterance.onerror = (e) => {
                     console.error("Speech synthesis error:", e);
                     reject(e);
                 };
-                speechSynthesis.speak(utterance);
+
+                // Workaround for browser bugs where speech can be cut off or not start
+                speechSynthesis.cancel(); 
+                setTimeout(() => {
+                    speechSynthesis.speak(utterance);
+                }, 100);
             });
         }
 
@@ -785,6 +832,7 @@
                 try {
                     await speakText(scripts[i]);
                     if (isSpeaking && i < scripts.length - 1) {
+                        // Pause between audio clips
                         await new Promise(resolve => setTimeout(resolve, 1500));
                     }
                 } catch (error) {
