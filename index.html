@@ -58,7 +58,7 @@
         .practice-btn { background-color: var(--surface-alt); border: 1px solid var(--border); border-radius: 0.75rem; padding: 0.75rem 1rem; text-align: center; font-weight: 500; cursor: pointer; transition: all 0.2s ease; display: block; width: 100%; }
         .practice-btn:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: var(--primary); color: var(--primary); }
         
-        .content-area { margin-top: 2rem; }
+        .content-area { margin-top: 2rem; padding-bottom: 100px; /* Add padding to prevent content from being hidden behind sticky controls */ }
         .loading-overlay { position: absolute; inset: 0; background: hsla(222, 47%, 11%, 0.8); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; border-radius: 1.5rem; transition: opacity .3s ease; backdrop-filter: blur(4px); }
         .loading-spinner { width: 48px; height: 48px; border: 4px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 1rem; }
         .loading-text { color: var(--primary-light); font-weight: 600; font-size: 1.125rem; }
@@ -79,11 +79,14 @@
         .vstep-option { text-align: left; padding: 0.75rem 1.25rem; border: 2px solid var(--border); border-radius: 8px; cursor: pointer; transition: all 0.2s ease; }
         .vstep-option:hover { background: var(--primary-light); border-color: var(--primary); }
         .vstep-option.selected { background-color: var(--primary-light); border-color: var(--primary); }
-        .vstep-option.correct { background-color: #dcfce7 !important; border-color: var(--success) !important; color: #166534 !important; font-weight: 600; }
-        html.dark .vstep-option.correct { color: #bbf7d0 !important; }
-        .vstep-option.incorrect { background-color: #fee2e2 !important; border-color: var(--danger) !important; color: #991b1b !important; }
-        html.dark .vstep-option.incorrect { color: #fecaca !important; }
         
+        /* --- FIX: Answer Readability --- */
+        .vstep-option.correct { background-color: #dcfce7 !important; border-color: var(--success) !important; color: #166534 !important; font-weight: 600; }
+        .vstep-option.incorrect { background-color: #fee2e2 !important; border-color: var(--danger) !important; color: #991b1b !important; }
+        
+        html.dark .vstep-option.correct { background-color: #14532d !important; border-color: #4ade80 !important; color: #bbf7d0 !important; }
+        html.dark .vstep-option.incorrect { background-color: #991b1b !important; border-color: #f87171 !important; color: #fecaca !important; }
+
         /* Reading Layout Fix */
         .vstep-reading-layout { display: flex; flex-direction: column; }
         @media (min-width: 768px) {
@@ -91,6 +94,45 @@
             .vstep-reading-passage { flex: 6; overflow-y: auto; padding-right: 1.5rem; border-right: 1px solid var(--border); line-height: 1.7; }
             .vstep-reading-questions { flex: 4; overflow-y: auto; }
         }
+
+        /* --- NEW: Sticky Controls --- */
+        .sticky-controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background-color: var(--surface);
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border);
+            box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            z-index: 50;
+            transition: background-color 0.3s ease, border-color 0.3s ease;
+        }
+        html.dark .sticky-controls {
+             box-shadow: 0 -4px 10px rgba(0, 0, 0, 0.3);
+        }
+        .sticky-controls-wrapper {
+            max-width: 1000px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .audio-status-indicator {
+            font-weight: 600;
+            color: var(--primary);
+            flex-grow: 1;
+            text-align: left;
+        }
+        .control-buttons {
+            display: flex;
+            gap: 1rem;
+        }
+
 
         .word-count { text-align: right; font-size: 0.9rem; color: var(--text-secondary); margin-top: 0.5rem; }
         .record-btn { background-color: var(--danger); }
@@ -303,11 +345,16 @@
                     <div id="test-result-summary" class="hidden"></div>
                     <div class="info-card"><p class="font-semibold text-center">Đọc trước các câu hỏi. Nhấn "Bắt đầu nghe" để phát các đoạn âm thanh.</p></div>
                     <div id="listening-question-area">${questionsHTML}</div>
-                    <div id="audio-status" class="text-center mt-4 font-semibold text-indigo-600 dark:text-indigo-400"></div>
-                    <div class="text-center mt-6 flex justify-center gap-4">
-                        <button id="startAudioBtn" class="secondary-btn">Bắt đầu nghe</button>
-                        <button id="stopAudioBtn" class="secondary-btn hidden">Dừng phát âm</button>
-                        <button id="submitTestBtn" class="primary-btn">Nộp bài</button>
+                </div>
+                <!-- Sticky Controls -->
+                <div id="sticky-controls-container" class="sticky-controls">
+                    <div class="sticky-controls-wrapper">
+                        <div id="audio-status" class="audio-status-indicator">Sẵn sàng</div>
+                        <div class="control-buttons">
+                            <button id="startAudioBtn" class="secondary-btn">Bắt đầu nghe</button>
+                            <button id="stopAudioBtn" class="secondary-btn hidden">Dừng phát âm</button>
+                            <button id="submitTestBtn" class="primary-btn">Nộp bài</button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -340,7 +387,10 @@
                 startBtn.disabled = false;
             });
 
-            submitBtn.addEventListener('click', () => handleSubmitTest('listening-question-area'));
+            submitBtn.addEventListener('click', () => {
+                handleSubmitTest('listening-question-area');
+                document.getElementById('sticky-controls-container').classList.add('hidden');
+            });
         }
 
         function renderReadingUI(data) {
@@ -364,13 +414,22 @@
                         <div class="vstep-reading-passage">${data.passage.replace(/\n/g, '<br><br>')}</div>
                         <div class="vstep-reading-questions" id="reading-question-area">${questionsHTML}</div>
                     </div>
-                    <div class="text-center mt-8">
-                        <button id="submitTestBtn" class="primary-btn">Nộp bài</button>
+                </div>
+                <!-- Sticky Controls -->
+                <div id="sticky-controls-container" class="sticky-controls">
+                     <div class="sticky-controls-wrapper">
+                        <div class="audio-status-indicator"></div> <!-- Placeholder for alignment -->
+                        <div class="control-buttons">
+                            <button id="submitTestBtn" class="primary-btn">Nộp bài</button>
+                        </div>
                     </div>
                 </div>
             `;
             attachOptionListeners('reading-question-area');
-            document.getElementById('submitTestBtn').addEventListener('click', () => handleSubmitTest('reading-question-area'));
+            document.getElementById('submitTestBtn').addEventListener('click', () => {
+                handleSubmitTest('reading-question-area');
+                document.getElementById('sticky-controls-container').classList.add('hidden');
+            });
         }
         
         function renderWritingUI(data, task) {
@@ -521,15 +580,29 @@
             let scoreColor = 'var(--danger)';
             let scoreBg = '#fee2e2';
             let scoreText = '#991b1b';
+            
+            if (document.documentElement.classList.contains('dark')) {
+                scoreBg = '#991b1b';
+                scoreText = '#fecaca';
+            }
+
 
             if (percentage >= 80) {
                 scoreColor = 'var(--success)';
                 scoreBg = '#dcfce7';
                 scoreText = '#166534';
+                if (document.documentElement.classList.contains('dark')) {
+                    scoreBg = '#14532d';
+                    scoreText = '#bbf7d0';
+                }
             } else if (percentage >= 50) {
                 scoreColor = 'var(--warning)';
                 scoreBg = '#fef3c7';
                 scoreText = '#92400e';
+                if (document.documentElement.classList.contains('dark')) {
+                    scoreBg = '#78350f';
+                    scoreText = '#fde68a';
+                }
             }
 
             summaryEl.innerHTML = `
@@ -545,7 +618,8 @@
             summaryEl.classList.remove('hidden');
             summaryEl.scrollIntoView({ behavior: 'smooth' });
 
-            document.getElementById('submitTestBtn').disabled = true;
+            const submitBtn = document.getElementById('submitTestBtn');
+            if(submitBtn) submitBtn.disabled = true;
         }
 
 
@@ -613,37 +687,46 @@
             }
         }
         
-        // Updated prompts to include correct_answer
         async function generateListeningTest(topic, part) {
             const prompt = `Create a VSTEP Listening Part ${part} test based on the topic: "${topic}".
-            - The language level must be B1-B2 CEFR.
-            - If part is 1, return a JSON array of 8 objects. Each object must have "audio_script", and a "questions" array of 1 question object.
-            - If part is 2, return a JSON array of 3 objects. Each object must have "audio_script", and a "questions" array of 4 question objects.
-            - If part is 3, return a JSON array of 3 objects. Each object must have "audio_script", and a "questions" array of 5 question objects.
-            - Each question object must have "id", "question", "options" (array of 4 strings), and "correct_answer" (the full string of the correct option).
-            - The content must be strictly related to the topic.`;
+            - The language level must be B1-B2 CEFR. The audio script should be clear, spoken at a natural pace, and have appropriate length for the part.
+            - If part is 1 (Short announcements), return a JSON array of 8 objects. Each object must have "audio_script" (20-30 seconds), and a "questions" array of 1 question object.
+            - If part is 2 (Conversations), return a JSON array of 3 objects. Each object must have "audio_script" (60-90 seconds, 2 speakers), and a "questions" array of 4 question objects.
+            - If part is 3 (Lectures/Talks), return a JSON array of 3 objects. Each object must have "audio_script" (90-120 seconds, 1 speaker), and a "questions" array of 5 question objects.
+            - Each question object must have "id" (sequential number), "question" (clear and concise), "options" (an array of 4 strings, with one correct answer and three plausible but incorrect distractors), and "correct_answer" (the full string of the correct option).
+            - The content must be strictly related to the topic. Ensure questions test for main ideas, specific details, and inference.`;
             const schema = { type: "ARRAY", items: { type: "OBJECT", properties: { audio_script: { type: "STRING" }, questions: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "NUMBER" }, question: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, correct_answer: { type: "STRING" } }, required: ["id", "question", "options", "correct_answer"] } } }, required: ["audio_script", "questions"] } };
             return await callGemini(prompt, schema);
         }
 
         async function generateReadingTest(topic) {
             const prompt = `Create a complete VSTEP Reading test based on the topic: "${topic}".
-            Return a single JSON object with: "title", "passage" (~450-500 words, B1-B2 CEFR level), and a "questions" array of 10 objects. Each question must have "id", "question", "options" (array of 4 strings), and "correct_answer" (the full string of the correct option).`;
+            Return a single JSON object with: 
+            1. "title": A suitable title for the passage.
+            2. "passage": A well-structured academic-style passage of 450-500 words, at a B1-B2 CEFR level. The passage should be informative and engaging.
+            3. "questions": An array of 10 multiple-choice question objects. Each question must have:
+                - "id": A sequential number from 1 to 10.
+                - "question": A clear question about the passage. The questions should cover a range of skills: main idea, specific details, vocabulary in context, inference, and author's purpose.
+                - "options": An array of 4 strings (A, B, C, D). One is the correct answer, and the other three are plausible distractors.
+                - "correct_answer": The full string of the correct option.`;
              const schema = { type: "OBJECT", properties: { title: { type: "STRING" }, passage: { type: "STRING" }, questions: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "NUMBER" }, question: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, correct_answer: { type: "STRING" } }, required: ["id", "question", "options", "correct_answer"] } } }, required: ["title", "passage", "questions"] };
             return await callGemini(prompt, schema);
         }
 
         async function generateWritingTest(topic, task) {
-            const prompt = `Create a VSTEP Writing Task ${task} prompt based on the topic: "${topic}". Return a single JSON object with a "prompt" string.`;
+            const prompt = `Create a VSTEP Writing Task ${task} prompt based on the topic: "${topic}". The prompt must be realistic for an exam setting.
+            - If Task 1, create a scenario for writing a formal or informal letter/email of about 120 words. The prompt should clearly state the situation, the recipient, and the 3 key points that must be addressed in the letter.
+            - If Task 2, create an essay question of about 250 words. The prompt should present a clear topic, often a statement to agree or disagree with, or a problem with causes and solutions to discuss. It should encourage the use of specific reasons and examples.
+            Return a single JSON object with a "prompt" string containing the full instructions.`;
             const schema = { type: "OBJECT", properties: { prompt: { type: "STRING" } }, required: ["prompt"] };
             return await callGemini(prompt, schema);
         }
         
         async function generateSpeakingTest(topic, part) {
-            const prompt = `Create a VSTEP Speaking Part ${part} test based on the topic: "${topic}".
-            - If Part 1, return a JSON object with "topic1_title", "topic1_questions" array (3 questions), "topic2_title", and "topic2_questions" array (3 questions).
-            - If Part 2, return a JSON object with "situation" and "options" array (3 solutions).
-            - If Part 3, return a JSON object with "topic", "idea_map" array (3-4 ideas), and "follow_up_questions" array (2-3 questions).`;
+            const prompt = `Create a VSTEP Speaking Part ${part} test based on the topic: "${topic}". The topics should be common and accessible for B1-B2 learners.
+            - If Part 1 (Social Interaction), return a JSON object with "topic1_title", "topic1_questions" (an array of 3-4 introductory questions), "topic2_title", and "topic2_questions" (an array of 3-4 questions on a different subject).
+            - If Part 2 (Solution Discussion), return a JSON object with a "situation" (a clear problem) and an "options" array (3 distinct and viable solutions for the user to discuss and choose from).
+            - If Part 3 (Topic Development), return a JSON object with a "topic" (a broader concept), an "idea_map" (an array of 3-4 related ideas to guide the user's talk), and "follow_up_questions" (an array of 2-3 questions to extend the discussion).`;
             let schema;
             if (part === '1') {
                 schema = { type: "OBJECT", properties: { topic1_title: { type: "STRING" }, topic1_questions: { type: "ARRAY", items: { type: "STRING" } }, topic2_title: { type: "STRING" }, topic2_questions: { type: "ARRAY", items: { type: "STRING" } } }, required: ["topic1_title", "topic1_questions", "topic2_title", "topic2_questions"] };
