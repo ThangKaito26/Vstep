@@ -169,6 +169,61 @@
         .hidden { display: none; }
         .card-title-alt { font-size: 1.1rem; font-weight: 600; margin-top: 1rem; margin-bottom: .5rem; color: var(--text-primary); }
         .score-circle { width: 100px; height: 100px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 1rem; font-size: 2rem; font-weight: 700; border-width: 5px; border-style: solid; }
+
+        /* Custom styles for listening section */
+        .listening-section-container {
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .listening-script-toggle-btn {
+            background-color: var(--surface-alt);
+            border: 1px solid var(--border);
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            margin-top: 1rem;
+        }
+        .listening-script-toggle-btn:hover {
+            background-color: var(--border);
+        }
+        .listening-script-content {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: var(--surface-alt);
+            border-radius: 0.75rem;
+            border: 1px solid var(--border);
+            font-size: 0.95rem;
+            line-height: 1; /* Reduced line height for closer lines */
+            white-space: pre-wrap; /* Preserve line breaks */
+            word-break: break-word; /* Break long words */
+        }
+        .listening-sentence-play-btn {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.25rem 0.6rem;
+            border-radius: 0.25rem;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+            margin-right: 0.5rem; /* Margin to the right of the button */
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            vertical-align: middle; /* Align button vertically with text */
+        }
+        .listening-sentence-play-btn:hover {
+            background-color: var(--primary-hover);
+        }
+        .listening-sentence {
+            display: block; /* Each sentence on a new line */
+            margin-bottom: -2.2rem; /* Reduced margin-bottom for closer sentences */
+            line-height: 1.2; /* Adjusted line-height for the sentence itself */
+        }
     </style>
 </head>
 <body class="transition-colors duration-300">
@@ -188,7 +243,11 @@
         <div class="main-card">
             <div class="text-center mb-8">
                  <label for="vstepTopicInput" class="block font-semibold mb-2 text-lg text-gray-700 dark:text-gray-300">Nhập chủ đề để tạo bài luyện tập:</label>
-                 <input type="text" id="vstepTopicInput" class="max-w-lg mx-auto w-full p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-center text-lg focus:border-primary focus:ring-primary" placeholder="Ví dụ: technology, environment, education...">
+                 <div class="flex justify-center items-center gap-2 max-w-lg mx-auto">
+                    <input type="text" id="vstepTopicInput" class="flex-grow p-3 border-2 border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-center text-lg focus:border-primary focus:ring-primary" placeholder="Ví dụ: technology, environment, education...">
+                    <button id="clearTopicBtn" class="secondary-btn px-4 py-3 text-sm">Xóa</button>
+                    <button id="pasteTopicBtn" class="secondary-btn px-4 py-3 text-sm">Dán</button>
+                 </div>
             </div>
 
             <!-- Listening Section -->
@@ -258,6 +317,8 @@
         let isRecording = false;
         let accumulatedTranscript = '';
         let availableVoices = []; // To store available voices
+        let currentAudioQueue = []; // To manage audio playback for individual sentences
+        let currentAudioIndex = 0; // To track current audio in queue
 
         // --- NEW: Function to load voices ---
         function loadVoices() {
@@ -278,6 +339,27 @@
             buttons.forEach(button => {
                 button.addEventListener('click', handlePracticeRequest);
             });
+
+            // Add event listeners for clear and paste buttons
+            document.getElementById('clearTopicBtn').addEventListener('click', () => {
+                document.getElementById('vstepTopicInput').value = '';
+            });
+            document.getElementById('pasteTopicBtn').addEventListener('click', async () => {
+                try {
+                    const text = await navigator.clipboard.readText();
+                    document.getElementById('vstepTopicInput').value = text;
+                } catch (err) {
+                    console.error('Failed to read clipboard contents: ', err);
+                    // Using a custom message in the UI instead of alert
+                    const inputElement = document.getElementById('vstepTopicInput');
+                    inputElement.placeholder = 'Không thể dán từ clipboard. Vui lòng dán thủ công.';
+                    inputElement.classList.add('border-red-500', 'ring-red-500');
+                    setTimeout(() => {
+                        inputElement.classList.remove('border-red-500', 'ring-red-500');
+                        inputElement.placeholder = 'Ví dụ: technology, environment, education...';
+                    }, 3000);
+                }
+            });
         });
 
         const contentArea = document.getElementById('content-area');
@@ -285,7 +367,14 @@
         function getTopic() {
             const topic = document.getElementById('vstepTopicInput').value.trim();
             if (!topic) {
-                alert("Vui lòng nhập một chủ đề để tạo bài luyện tập.");
+                // Changed alert to a more user-friendly message in the UI
+                const inputElement = document.getElementById('vstepTopicInput');
+                inputElement.classList.add('border-red-500', 'ring-red-500'); // Highlight input
+                inputElement.placeholder = 'Vui lòng nhập một chủ đề!';
+                setTimeout(() => {
+                    inputElement.classList.remove('border-red-500', 'ring-red-500');
+                    inputElement.placeholder = 'Ví dụ: technology, environment, education...';
+                }, 3000); // Remove highlight after 3 seconds
                 return null;
             }
             return topic;
@@ -362,13 +451,46 @@
         // --- RENDERERS ---
         function renderListeningUI(data, part) {
             const partTitle = part === '1' ? 'Thông báo ngắn' : (part === '2' ? 'Hội thoại' : 'Bài giảng');
-            let questionsHTML = '';
+            let sectionsHTML = '';
             
             data.forEach((section, sectionIndex) => {
-                questionsHTML += `<div class="mb-8 p-4 border-l-4 border-indigo-200 dark:border-indigo-800" data-section-index="${sectionIndex}">`;
-                questionsHTML += `<h4 class="text-xl font-semibold mb-4">Bài nghe ${sectionIndex + 1}</h4>`;
+                // Normalize whitespace in the audio script before splitting into sentences
+                let cleanedAudioScript = section.audio_script
+                    .replace(/[\r\n]+/g, ' ') // Replace one or more newlines with a single space
+                    .replace(/\s{2,}/g, ' ') // Replace two or more spaces with a single space
+                    .trim(); // Trim leading/trailing spaces from the whole script
+
+                // Split audio_script into sentences for individual playback
+                // Simple split by . ! ? followed by space or end of string.
+                // The \s* will now only match a single space if it exists, due to prior cleaning.
+                const sentences = cleanedAudioScript.match(/[^.!?]+[.!?]\s*|$[^.!?]*$/g).filter(s => s.trim().length > 0);
+
+                sectionsHTML += `
+                    <div class="listening-section-container" data-section-index="${sectionIndex}">
+                        <h4 class="text-xl font-semibold mb-4">Bài nghe ${sectionIndex + 1}</h4>
+                        <div class="flex justify-between items-center mb-4">
+                            <button class="primary-btn play-section-audio-btn" data-audio-script="${section.audio_script}">
+                                Phát toàn bộ đoạn này
+                            </button>
+                            <button class="listening-script-toggle-btn" data-target="script-content-${sectionIndex}">
+                                Ẩn/Hiện Văn bản
+                            </button>
+                        </div>
+                        <div id="script-content-${sectionIndex}" class="listening-script-content hidden">
+                            ${sentences.map((sentence, sIdx) => `
+                                <span class="listening-sentence" data-sentence-index="${sIdx}">
+                                    <button class="listening-sentence-play-btn" data-sentence="${sentence.trim()}">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
+                                            <path fill-rule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.348c1.295.712 1.295 2.566 0 3.278L7.28 19.991c-1.25.687-2.779-.217-2.779-1.643V5.653z" clip-rule="evenodd" />
+                                        </svg>
+                                    </button>
+                                    ${sentence.trim()}
+                                </span>
+                            `).join('')}
+                        </div>
+                `;
                 section.questions.forEach((q) => {
-                    questionsHTML += `
+                    sectionsHTML += `
                         <div class="vstep-question" data-question-id="${q.id}" data-correct-answer="${q.correct_answer}">
                             <p class="vstep-question-text">${q.id}. ${q.question}</p>
                             <div class="vstep-options">
@@ -377,22 +499,22 @@
                         </div>
                     `;
                 });
-                questionsHTML += `</div>`;
+                sectionsHTML += `</div>`; // Close listening-section-container
             });
 
             contentArea.innerHTML = `
                 <div class="main-card">
                     <h3 class="skill-title">🎧 Luyện Nghe - Phần ${part}: ${partTitle}</h3>
                     <div id="test-result-summary" class="hidden"></div>
-                    <div class="info-card"><p class="font-semibold text-center">Đọc trước các câu hỏi. Nhấn "Bắt đầu nghe" để phát các đoạn âm thanh.</p></div>
-                    <div id="listening-question-area">${questionsHTML}</div>
+                    <div class="info-card"><p class="font-semibold text-center">Đọc trước các câu hỏi. Nhấn "Bắt đầu nghe toàn bộ" để phát tất cả các đoạn âm thanh.</p></div>
+                    <div id="listening-sections-area">${sectionsHTML}</div>
                 </div>
                 <!-- Sticky Controls -->
                 <div id="sticky-controls-container" class="sticky-controls">
                     <div class="sticky-controls-wrapper">
                         <div id="audio-status" class="audio-status-indicator">Sẵn sàng</div>
                         <div class="control-buttons">
-                            <button id="startAudioBtn" class="secondary-btn">Bắt đầu nghe</button>
+                            <button id="startAllAudioBtn" class="secondary-btn">Bắt đầu nghe toàn bộ</button>
                             <button id="stopAudioBtn" class="secondary-btn hidden">Dừng phát âm</button>
                             <button id="submitTestBtn" class="primary-btn">Nộp bài</button>
                         </div>
@@ -400,22 +522,60 @@
                 </div>
             `;
             
-            attachOptionListeners('listening-question-area');
+            attachOptionListeners('listening-sections-area');
 
-            const startBtn = document.getElementById('startAudioBtn');
+            // Event listener for toggling script visibility
+            document.querySelectorAll('.listening-script-toggle-btn').forEach(button => {
+                button.addEventListener('click', (e) => {
+                    const targetId = e.target.dataset.target;
+                    document.getElementById(targetId).classList.toggle('hidden');
+                    e.target.textContent = document.getElementById(targetId).classList.contains('hidden') ? 'Hiện Văn bản' : 'Ẩn Văn bản';
+                });
+            });
+
+            // Event listener for playing individual sentences
+            document.querySelectorAll('.listening-sentence-play-btn').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const sentence = e.target.closest('.listening-sentence-play-btn').dataset.sentence;
+                    speechSynthesis.cancel(); // Stop any ongoing speech
+                    isSpeaking = false; // Reset global speaking flag
+                    await speakText(sentence);
+                });
+            });
+
+            // Event listener for playing a whole section's audio
+            document.querySelectorAll('.play-section-audio-btn').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const audioScript = e.target.dataset.audioScript;
+                    speechSynthesis.cancel(); // Stop any ongoing speech
+                    isSpeaking = false; // Reset global speaking flag
+                    const audioStatusEl = document.getElementById('audio-status');
+                    audioStatusEl.textContent = 'Đang phát đoạn này...';
+                    try {
+                        await speakText(audioScript);
+                        audioStatusEl.textContent = 'Đã phát xong đoạn này.';
+                    } catch (error) {
+                        audioStatusEl.textContent = 'Lỗi phát âm thanh.';
+                        console.error("Error playing section audio:", error);
+                    }
+                });
+            });
+
+
+            const startAllAudioBtn = document.getElementById('startAllAudioBtn');
             const stopBtn = document.getElementById('stopAudioBtn');
             const submitBtn = document.getElementById('submitTestBtn');
             const audioStatusEl = document.getElementById('audio-status');
 
-            startBtn.addEventListener('click', () => {
-                startBtn.classList.add('hidden');
+            startAllAudioBtn.addEventListener('click', () => {
+                startAllAudioBtn.classList.add('hidden');
                 stopBtn.classList.remove('hidden');
-                startBtn.disabled = true;
+                startAllAudioBtn.disabled = true;
                 playAudioQueue(data.map(d => d.audio_script), audioStatusEl, () => {
                     stopBtn.classList.add('hidden');
-                    startBtn.classList.remove('hidden');
-                    startBtn.disabled = false;
-                    startBtn.textContent = "Nghe lại";
+                    startAllAudioBtn.classList.remove('hidden');
+                    startAllAudioBtn.disabled = false;
+                    startAllAudioBtn.textContent = "Nghe lại toàn bộ";
                 });
             });
 
@@ -424,12 +584,12 @@
                 isSpeaking = false;
                 audioStatusEl.textContent = 'Đã dừng phát âm.';
                 stopBtn.classList.add('hidden');
-                startBtn.classList.remove('hidden');
-                startBtn.disabled = false;
+                startAllAudioBtn.classList.remove('hidden');
+                startAllAudioBtn.disabled = false;
             });
 
             submitBtn.addEventListener('click', () => {
-                handleSubmitTest('listening-question-area');
+                handleSubmitTest('listening-sections-area');
                 document.getElementById('sticky-controls-container').classList.add('hidden');
             });
         }
@@ -479,7 +639,7 @@
                     <h3 class="skill-title">✍️ Luyện Viết - Task ${task}</h3>
                     <div class="info-card">
                         <p class="font-semibold text-lg">Đề bài:</p>
-                        <p class="italic mt-2 text-gray-800 dark:text-gray-200 text-base leading-relaxed">${data.prompt.replace(/\n/g, '<br>')}</p>
+                        <div class="italic mt-2 text-gray-800 dark:text-gray-200 text-base leading-relaxed">${data.prompt.replace(/\n/g, '<br>')}</div>
                     </div>
                     <textarea id="writing-input" class="textarea-input" placeholder="Viết bài của bạn ở đây..."></textarea>
                     <p id="word-count" class="word-count">Số từ: 0</p>
@@ -778,12 +938,44 @@
         }
 
         async function generateWritingTest(topic, task) {
-            const prompt = `Create a VSTEP Writing Task ${task} prompt based on the topic: "${topic}". The prompt must be realistic for an exam setting.
-            - If Task 1, create a scenario for writing a formal or informal letter/email of about 120 words. The prompt should clearly state the situation, the recipient, and the 3 key points that must be addressed in the letter.
-            - If Task 2, create an essay question of about 250 words. The prompt should present a clear topic, often a statement to agree or disagree with, or a problem with causes and solutions to discuss. It should encourage the use of specific reasons and examples.
-            Return a single JSON object with a "prompt" string containing the full instructions.`;
-            const schema = { type: "OBJECT", properties: { prompt: { type: "STRING" } }, required: ["prompt"] };
-            return await callGemini(prompt, schema);
+            let prompt;
+            let schema;
+
+            if (task === '1') {
+                prompt = `Create a VSTEP Writing Task 1 prompt based on the topic: "${topic}". The prompt must be realistic for an exam setting and follow the VSTEP format.
+                Return a single JSON object with the following structure:
+                {
+                    "prompt_intro": "A brief introductory scenario (e.g., You received an email from your friend Mary...)",
+                    "email_excerpt": "The actual email content from Mary (around 50-80 words, with an informal tone if from a friend, or formal if from a colleague/company).",
+                    "instructions": "Clear instructions for the reply, including 3 key points that must be addressed in the letter, and the word count requirement (e.g., Write a reply to Mary. In your email, you have to tell her [point 1], [point 2], and [point 3]. You should write at least 120 words.)."
+                }
+                Ensure the email_excerpt and instructions are distinct and clearly separated. The content should be at a B1-B2 CEFR level.`;
+                schema = { 
+                    type: "OBJECT", 
+                    properties: { 
+                        prompt_intro: { type: "STRING" },
+                        email_excerpt: { type: "STRING" },
+                        instructions: { type: "STRING" }
+                    }, 
+                    required: ["prompt_intro", "email_excerpt", "instructions"] 
+                };
+            } else if (task === '2') {
+                prompt = `Create a VSTEP Writing Task 2 prompt based on the topic: "${topic}". The prompt must be realistic for an exam setting.
+                The prompt should present a clear topic, often a statement to agree or disagree with, or a problem with causes and solutions to discuss. It should encourage the use of specific reasons and examples. The essay should be about 250 words.
+                Return a single JSON object with a "prompt" string containing the full instructions.`;
+                schema = { type: "OBJECT", properties: { prompt: { type: "STRING" } }, required: ["prompt"] };
+            }
+            
+            const rawResponse = await callGemini(prompt, schema);
+
+            // Reconstruct the prompt string for rendering based on the new structure
+            if (task === '1') {
+                return {
+                    prompt: `${rawResponse.prompt_intro}\n\n${rawResponse.email_excerpt}\n\n${rawResponse.instructions}`
+                };
+            } else {
+                return rawResponse; // Task 2 already returns a single 'prompt' string
+            }
         }
         
         async function generateSpeakingTest(topic, part) {
@@ -892,7 +1084,10 @@
         function handleAdvancedRecording() {
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!SpeechRecognition) {
-                alert('Trình duyệt của bạn không hỗ trợ nhận dạng giọng nói.');
+                // Changed alert to a more user-friendly message in the UI
+                const statusEl = document.getElementById('speaking-status');
+                statusEl.textContent = 'Lỗi: Trình duyệt của bạn không hỗ trợ nhận dạng giọng nói.';
+                statusEl.classList.add('text-red-500');
                 return;
             }
 
