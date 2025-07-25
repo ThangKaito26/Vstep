@@ -894,32 +894,43 @@
         }
         
         async function generateListeningTest(topic, part) {
-            let idInstruction = '';
-            let questionCountInstruction = '';
-            let totalQuestions = 0;
+            let prompt;
+            const schema = { type: "ARRAY", items: { type: "OBJECT", properties: { audio_script: { type: "STRING" }, questions: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "NUMBER" }, question: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, correct_answer: { type: "STRING" } }, required: ["id", "question", "options", "correct_answer"] } } }, required: ["audio_script", "questions"] } };
 
             if (part === '1') {
-                idInstruction = "The 'id' for the questions must be sequential from 1 to 8.";
-                questionCountInstruction = "return a JSON array of 8 objects. Each object must have 'audio_script' (20-30 seconds), and a 'questions' array containing exactly 1 question object.";
-                totalQuestions = 8;
-            } else if (part === '2') {
-                idInstruction = "The 'id' for the questions must be sequential from 9 to 20.";
-                questionCountInstruction = "return a JSON array of 3 objects (for 3 conversations). Each object must have 'audio_script' (60-90 seconds, 2 speakers), and a 'questions' array containing exactly 4 question objects.";
-                totalQuestions = 12;
-            } else if (part === '3') {
-                idInstruction = "The 'id' for the questions must be sequential from 21 to 35.";
-                questionCountInstruction = "return a JSON array of 3 objects (for 3 lectures/talks). Each object must have 'audio_script' (90-120 seconds, 1 speaker), and a 'questions' array containing exactly 5 question objects.";
-                totalQuestions = 15;
-            }
+                prompt = `Create a VSTEP Listening Part 1 test with 8 questions, based on the general topic: "${topic}".
+Part 1 consists of 8 separate, short recordings. You must return a JSON array of 8 objects. Each object represents one recording and its corresponding question.
 
-            const prompt = `Create a VSTEP Listening Part ${part} test based on the topic: "${topic}".
-            - The language level must be B1-B2 CEFR. The audio script should be clear, spoken at a natural pace, and have appropriate length for the part.
-            - Structure: You must ${questionCountInstruction}
-            - Question Numbering: ${idInstruction} The total number of questions for this part must be exactly ${totalQuestions}.
-            - Each question object must have: "id" (a number), "question" (clear and concise), "options" (an array of 4 strings, with one correct answer and three plausible but incorrect distractors), and "correct_answer" (the full string of the correct option).
-            - The content must be strictly related to the topic. Ensure questions test for main ideas, specific details, and inference.`;
+For each of the 8 objects, provide:
+1. 'audio_script': A very short, simple English dialogue (2-3 turns between speakers) or a brief monologue. The script should be around 55-70 words long. The content should be a simple, everyday situation.
+2. 'questions': An array containing exactly ONE question object.
+
+The question object must have:
+- 'id': A sequential number from 1 to 8.
+- 'question': A direct question about a specific detail in the audio script (e.g., "What is the price?", "Where are they meeting?", "What did she buy?").
+- 'options': An array of 4 short strings. One is the correct answer, and the other three are plausible distractors based on keywords mentioned in the script.
+- 'correct_answer': The full string of the correct option.
+
+IMPORTANT:
+- Do NOT include any introductory text like "This is the listening test..." or "Now we are ready to start...". The 'audio_script' for each of the 8 items should ONLY contain the dialogue/monologue for that specific question.
+- The language level must be A2-B1 CEFR.
+- The 8 questions should be related to the general topic of "${topic}" but should cover different situations within that topic.`;
+            } else if (part === '2') {
+                prompt = `Create a VSTEP Listening Part 2 test based on the topic: "${topic}".
+                - Structure: You must return a JSON array of 3 objects (for 3 conversations). Each object must have 'audio_script' (a dialogue of 60-90 seconds between 2 speakers), and a 'questions' array containing exactly 4 question objects.
+                - Question Numbering: The 'id' for the questions must be sequential from 9 to 20 across all 3 conversations.
+                - Each question object must have: "id", "question", "options" (4 strings), and "correct_answer".
+                - The language level must be B1-B2 CEFR. The content must be strictly related to the topic.
+                - Do NOT include any generic test instructions in the audio_script.`;
+            } else if (part === '3') {
+                prompt = `Create a VSTEP Listening Part 3 test based on the topic: "${topic}".
+                - Structure: You must return a JSON array of 3 objects (for 3 lectures/talks). Each object must have 'audio_script' (a monologue of 90-120 seconds by 1 speaker), and a 'questions' array containing exactly 5 question objects.
+                - Question Numbering: The 'id' for the questions must be sequential from 21 to 35 across all 3 talks.
+                - Each question object must have: "id", "question", "options" (4 strings), and "correct_answer".
+                - The language level must be B1-B2 CEFR. The content must be strictly related to the topic.
+                - Do NOT include any generic test instructions in the audio_script.`;
+            }
             
-            const schema = { type: "ARRAY", items: { type: "OBJECT", properties: { audio_script: { type: "STRING" }, questions: { type: "ARRAY", items: { type: "OBJECT", properties: { id: { type: "NUMBER" }, question: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, correct_answer: { type: "STRING" } }, required: ["id", "question", "options", "correct_answer"] } } }, required: ["audio_script", "questions"] } };
             return await callGemini(prompt, schema);
         }
 
